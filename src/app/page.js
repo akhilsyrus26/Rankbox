@@ -103,31 +103,54 @@ export default function Home() {
   const loadDefaultTrending = async () => {
     setIsDiscoverLoading(true);
     try {
-      const [jikanRes, tvmazeRes] = await Promise.all([
+      const [jikanRes, tvmazeRes, jikanMangaRes] = await Promise.allSettled([
         fetch('https://api.jikan.moe/v4/top/anime?limit=8'),
-        fetch('https://api.tvmaze.com/shows')
+        fetch('https://api.tvmaze.com/shows'),
+        fetch('https://api.jikan.moe/v4/top/manga?limit=8')
       ]);
-      const jikanData = await jikanRes.json();
-      const tvmazeData = await tvmazeRes.json();
 
-      const animeResults = (jikanData.data || []).map(anime => ({
-        api_id: `anime_${anime.mal_id}`, title: anime.title,
-        image: anime.images.jpg.image_url, type: 'Anime', category: 'anime',
-        description: anime.synopsis || "No description available.",
-        popularity: anime.members || 0
-      }));
+      let animeResults = [];
+      let tvResults = [];
+      let mangaResults = [];
 
-      const tvResults = (tvmazeData || []).slice(0, 8).map(show => ({
-        api_id: `tv_${show.id}`, title: show.name,
-        image: show.image ? show.image.medium : 'https://via.placeholder.com/210x295/000000/FFFFFF',
-        type: 'TV/Movie', category: 'tv',
-        description: show.summary ? show.summary.replace(/<[^>]+>/g, '') : "No description available.",
-        popularity: show.weight * 10000
-      }));
+      if (jikanRes.status === 'fulfilled') {
+        const jikanData = await jikanRes.value.json();
+        animeResults = (jikanData.data || []).map(anime => ({
+          api_id: `anime_${anime.mal_id}`, title: anime.title,
+          image: anime.images?.jpg?.image_url || 'https://via.placeholder.com/210x295/000000/FFFFFF?text=No+Image', 
+          type: 'Anime', category: 'anime',
+          description: anime.synopsis || "No description available.",
+          popularity: anime.members || 0
+        }));
+      }
 
-      const combined = [...animeResults, ...tvResults].sort((a, b) => b.popularity - a.popularity);
+      if (tvmazeRes.status === 'fulfilled') {
+        const tvmazeData = await tvmazeRes.value.json();
+        tvResults = (tvmazeData || []).slice(0, 8).map(show => ({
+          api_id: `tv_${show.id}`, title: show.name,
+          image: show.image ? show.image.medium : 'https://via.placeholder.com/210x295/000000/FFFFFF?text=No+Image',
+          type: 'TV/Movie', category: 'tv',
+          description: show.summary ? show.summary.replace(/<[^>]+>/g, '') : "No description available.",
+          popularity: show.weight * 10000
+        }));
+      }
+
+      if (jikanMangaRes.status === 'fulfilled') {
+        const mangaData = await jikanMangaRes.value.json();
+        mangaResults = (mangaData.data || []).map(manga => ({
+          api_id: `manga_${manga.mal_id}`, title: manga.title,
+          image: manga.images?.jpg?.image_url || 'https://via.placeholder.com/210x295/000000/FFFFFF?text=No+Image', 
+          type: 'Manga', category: 'manga',
+          description: manga.synopsis || "No description available.",
+          popularity: manga.members || 0
+        }));
+      }
+
+      const combined = [...animeResults, ...tvResults, ...mangaResults].sort((a, b) => b.popularity - a.popularity);
       setDiscoverResults(combined);
-    } catch(err) {}
+    } catch(err) {
+      console.error(err);
+    }
     setIsDiscoverLoading(false);
   };
 
@@ -135,32 +158,68 @@ export default function Home() {
     if (!discoverQuery.trim()) return loadDefaultTrending();
     setIsDiscoverLoading(true);
     try {
-      const [jikanRes, tvmazeRes] = await Promise.all([
+      const [jikanRes, tvmazeRes, jikanMangaRes, openLibRes] = await Promise.allSettled([
         fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(discoverQuery)}&limit=10`),
-        fetch(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(discoverQuery)}`)
+        fetch(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(discoverQuery)}`),
+        fetch(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(discoverQuery)}&limit=10`),
+        fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(discoverQuery)}&limit=10`)
       ]);
-      const jikanData = await jikanRes.json();
-      const tvmazeData = await tvmazeRes.json();
 
-      const animeResults = (jikanData.data || []).map(anime => ({
-        api_id: `anime_${anime.mal_id}`, title: anime.title, image: anime.images.jpg.image_url,
-        type: 'Anime', category: 'anime', description: anime.synopsis || "No description available.",
-        popularity: anime.members || 0
-      }));
+      let animeResults = [];
+      let tvResults = [];
+      let mangaResults = [];
+      let bookResults = [];
 
-      const tvResults = (tvmazeData || []).slice(0, 10).map(item => ({
-        api_id: `tv_${item.show.id}`, title: item.show.name,
-        image: item.show.image ? item.show.image.medium : 'https://via.placeholder.com/210x295/000000/FFFFFF',
-        type: 'TV/Movie', category: 'tv', description: item.show.summary ? item.show.summary.replace(/<[^>]+>/g, '') : "No description available.",
-        popularity: item.score ? item.score * 100000 : 0
-      }));
+      if (jikanRes.status === 'fulfilled') {
+        const jikanData = await jikanRes.value.json();
+        animeResults = (jikanData.data || []).map(anime => ({
+          api_id: `anime_${anime.mal_id}`, title: anime.title, 
+          image: anime.images?.jpg?.image_url || 'https://via.placeholder.com/210x295/000000/FFFFFF?text=No+Image',
+          type: 'Anime', category: 'anime', description: anime.synopsis || "No description available.",
+          popularity: anime.members || 0
+        }));
+      }
 
-      let combined = [...animeResults, ...tvResults];
+      if (tvmazeRes.status === 'fulfilled') {
+        const tvmazeData = await tvmazeRes.value.json();
+        tvResults = (tvmazeData || []).slice(0, 10).map(item => ({
+          api_id: `tv_${item.show.id}`, title: item.show.name,
+          image: item.show.image ? item.show.image.medium : 'https://via.placeholder.com/210x295/000000/FFFFFF?text=No+Image',
+          type: 'TV/Movie', category: 'tv', description: item.show.summary ? item.show.summary.replace(/<[^>]+>/g, '') : "No description available.",
+          popularity: item.score ? item.score * 100000 : 0
+        }));
+      }
+
+      if (jikanMangaRes.status === 'fulfilled') {
+        const jikanMangaData = await jikanMangaRes.value.json();
+        mangaResults = (jikanMangaData.data || []).map(manga => ({
+          api_id: `manga_${manga.mal_id}`, title: manga.title, 
+          image: manga.images?.jpg?.image_url || 'https://via.placeholder.com/210x295/000000/FFFFFF?text=No+Image',
+          type: 'Manga', category: 'manga', description: manga.synopsis || "No description available.",
+          popularity: manga.members || 0
+        }));
+      }
+
+      if (openLibRes.status === 'fulfilled') {
+        const openLibData = await openLibRes.value.json();
+        bookResults = (openLibData.docs || []).filter(doc => doc.title).map(doc => ({
+          api_id: `book_${doc.key.replace('/works/', '')}`, 
+          title: doc.title,
+          image: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : 'https://via.placeholder.com/210x295/000000/FFFFFF?text=No+Cover',
+          type: 'Book/Novel', category: 'book',
+          description: doc.author_name ? `Author: ${doc.author_name.join(', ')}` : "No author information.",
+          popularity: doc.edition_count ? doc.edition_count * 1000 : 0
+        }));
+      }
+
+      let combined = [...animeResults, ...tvResults, ...mangaResults, ...bookResults];
       combined.forEach(show => { if (show.title.toLowerCase() === discoverQuery.toLowerCase()) show.popularity += 10000000; });
       combined.sort((a, b) => b.popularity - a.popularity);
       
-      setDiscoverResults(combined.slice(0, 16));
-    } catch (err) {}
+      setDiscoverResults(combined.slice(0, 30));
+    } catch (err) {
+      console.error(err);
+    }
     setIsDiscoverLoading(false);
   };
 
