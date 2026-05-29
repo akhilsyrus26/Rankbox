@@ -27,6 +27,7 @@ export default function Home() {
   const [socialUsers, setSocialUsers] = useState([]);
   const [socialShows, setSocialShows] = useState([]);
   const [activeSocialUser, setActiveSocialUser] = useState(null);
+  const [activeSettingsMenu, setActiveSettingsMenu] = useState(null);
 
   useEffect(() => {
     // Check active session on load
@@ -415,9 +416,20 @@ export default function Home() {
                  </div>
                  <span className="rating-pill-max">/10</span>
                </div>
-               <div className="card-actions">
-                 <button className="btn-small btn-group" onClick={() => addToCollection(show.id, show.collection_name)}>📂 Move to Collection</button>
-                 <button className="btn-small btn-remove" onClick={() => removeShow(show.id)}>🗑️ Remove from Log</button>
+               <div className="card-actions" style={{ position: 'relative' }}>
+                 <button 
+                    className="btn-small" 
+                    style={{ width: '100%', background: 'transparent', border: '1px solid var(--text-muted)', color: 'var(--text-muted)' }}
+                    onClick={() => setActiveSettingsMenu(activeSettingsMenu === show.id ? null : show.id)}
+                 >
+                    ⚙️ Settings
+                 </button>
+                 {activeSettingsMenu === show.id && (
+                     <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, background: 'var(--bg-dark)', padding: '10px', borderRadius: '8px', border: '1px solid var(--accent-primary)', marginBottom: '5px', zIndex: 100, display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.8)' }}>
+                         <button className="btn-small btn-group" style={{ margin: 0 }} onClick={() => { addToCollection(show.id, show.collection_name); setActiveSettingsMenu(null); }}>📂 Move to Collection</button>
+                         <button className="btn-small btn-remove" style={{ margin: 0 }} onClick={() => { removeShow(show.id); setActiveSettingsMenu(null); }}>🗑️ Remove from Log</button>
+                     </div>
+                 )}
                </div>
              </>
           ) : (
