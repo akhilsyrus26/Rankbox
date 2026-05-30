@@ -481,7 +481,7 @@ export default function Home() {
                </div>
              </>
           ) : (
-             <div className="rating-pill" style={{ justifyContent: 'center', width: '100%' }}>
+             <div className="rating-pill" style={{ justifyContent: 'space-between', width: '100%', padding: '0.4rem 1rem' }}>
                  <span className="rating-pill-label">Rating</span>
                  <span className="rating-pill-input" style={{ width: 'auto' }}>{show.rating || '-'}</span>
                  <span className="rating-pill-max">/10</span>
