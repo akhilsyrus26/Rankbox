@@ -77,7 +77,7 @@ export default function Home() {
       return;
     }
 
-    const pseudoEmail = `${username.trim().toLowerCase().replace(/[^a-z0-9]/g, '')}@rankbox.local`;
+    const pseudoEmail = `${username.trim().toLowerCase().replace(/[^a-z0-9]/g, '')}@rankboxapp.com`;
     setIsAuthLoading(true);
 
     const withTimeout = (promise, ms = 8000) => {
