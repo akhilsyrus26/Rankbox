@@ -30,6 +30,9 @@ export default function Home() {
   const [activeSettingsMenu, setActiveSettingsMenu] = useState(null);
   const [primaryTab, setPrimaryTab] = useState('all');
   const [secondaryTab, setSecondaryTab] = useState('all');
+  
+  const [showCustomModal, setShowCustomModal] = useState(false);
+  const [customItem, setCustomItem] = useState({ title: '', type: 'Anime', cover_url: '', description: '' });
 
   const watchCategories = [...new Set(myShows.filter(s => s.category && s.category.startsWith('custom_watch:')).map(s => s.category.replace('custom_watch:', '')))];
   const readCategories = [...new Set(myShows.filter(s => s.category && s.category.startsWith('custom_read:')).map(s => s.category.replace('custom_read:', '')))];
@@ -110,6 +113,36 @@ export default function Home() {
   };
 
   // --- API FETCHING ---
+  const handleCreateCustomItem = async (e) => {
+    e.preventDefault();
+    if (!customItem.title.trim()) return;
+    const apiId = `custom_${Date.now()}`;
+    const categoryName = customItem.type.toLowerCase();
+    
+    let pTab = 'watch';
+    if (categoryName === 'manga' || categoryName === 'book') pTab = 'read';
+
+    const { error } = await supabase.from('shows').insert([{
+      user_id: currentUser.id,
+      api_id: apiId,
+      title: customItem.title,
+      type: customItem.type,
+      description: customItem.description || 'Custom added item',
+      image: customItem.cover_url || '/placeholder.png',
+      rating: null,
+      status: 'watching',
+      category: categoryName
+    }]);
+
+    if (!error) {
+      setShowCustomModal(false);
+      setCustomItem({ title: '', type: 'Anime', cover_url: '', description: '' });
+      fetchMyShows(currentUser.id);
+      setPrimaryTab(pTab);
+      setCurrentView('log');
+    }
+  };
+
   const fetchMyShows = async (userId) => {
     const { data, error } = await supabase.from('shows').select('*').eq('user_id', userId);
     if (!error && data) setMyShows(data);
@@ -395,7 +428,7 @@ export default function Home() {
   const ShowCard = ({ show, isInteractive }) => {
     return (
       <div className="card">
-        <img className="card-img" src={show.image} alt={show.title} />
+        <img className="card-img" src={show.image || '/placeholder.png'} alt={show.title} onError={(e) => { e.target.onerror = null; e.target.src = '/placeholder.png'; }} />
         <div className="card-content">
           <h3 className="card-title">{show.title}</h3>
           <span className="card-type">{show.type}</span>
@@ -551,7 +584,7 @@ export default function Home() {
                       const isAdded = myShows.some(s => s.api_id === show.api_id);
                       return (
                         <div key={show.api_id} className="card">
-                          <img className="card-img" src={show.image} alt={show.title} />
+                          <img className="card-img" src={show.image || '/placeholder.png'} alt={show.title} onError={(e) => { e.target.onerror = null; e.target.src = '/placeholder.png'; }} />
                           <div className="card-content">
                             <h3 className="card-title">{show.title}</h3>
                             <span className="card-type">{show.type}</span>
@@ -568,6 +601,11 @@ export default function Home() {
                   )}
                 </div>
               )}
+              
+              <div style={{ textAlign: 'center', marginTop: '3rem', padding: '1rem' }}>
+                  <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>Can't find what you're looking for?</p>
+                  <button className="btn-small" style={{ maxWidth: '300px', margin: '0 auto', borderColor: 'var(--accent-secondary)', color: 'white', background: 'var(--accent-secondary)' }} onClick={() => setShowCustomModal(true)}>+ Add Custom Item</button>
+              </div>
             </div>
           </section>
         )}
@@ -660,6 +698,30 @@ export default function Home() {
           </section>
         )}
       </div>
+
+      {showCustomModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <div className="glass-panel" style={{ width: '90%', maxWidth: '500px', padding: '2rem' }}>
+            <h2 style={{ marginBottom: '1.5rem', textAlign: 'center', color: 'white' }}>Add Custom Item</h2>
+            <form onSubmit={handleCreateCustomItem} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <input type="text" placeholder="Title" value={customItem.title} onChange={e => setCustomItem({...customItem, title: e.target.value})} className="auth-input" required />
+              <select value={customItem.type} onChange={e => setCustomItem({...customItem, type: e.target.value})} className="auth-input" style={{ appearance: 'auto', background: 'rgba(0,0,0,0.5)' }}>
+                  <option value="Anime">Anime</option>
+                  <option value="TV">TV Series</option>
+                  <option value="Movie">Movie</option>
+                  <option value="Manga">Manga</option>
+                  <option value="Book">Book/Novel</option>
+              </select>
+              <input type="text" placeholder="Cover Image URL (Optional)" value={customItem.cover_url} onChange={e => setCustomItem({...customItem, cover_url: e.target.value})} className="auth-input" />
+              <textarea placeholder="Description (Optional)" value={customItem.description} onChange={e => setCustomItem({...customItem, description: e.target.value})} className="auth-input" style={{ minHeight: '80px', resize: 'vertical' }} />
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                  <button type="button" onClick={() => setShowCustomModal(false)} className="btn-small" style={{ background: 'transparent', border: '1px solid var(--text-muted)', color: 'white' }}>Cancel</button>
+                  <button type="submit" className="btn-small" style={{ background: 'var(--accent-primary)', color: 'white' }}>Add to Log</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }
