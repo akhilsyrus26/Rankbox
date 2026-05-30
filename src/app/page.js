@@ -76,16 +76,23 @@ export default function Home() {
     setAuthError('');
     if (!username || !password) return setAuthError('Please fill in all fields.');
 
-    const pseudoEmail = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@rankboxapp.com`;
+    const pseudoEmail = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@rankbox.local`;
     setIsAuthLoading(true);
+
+    const withTimeout = (promise, ms = 10000) => {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Network timeout. Please check your connection or try again.')), ms))
+      ]);
+    };
 
     try {
       if (authMode === 'register') {
-        const { data, error } = await supabase.auth.signUp({ email: pseudoEmail, password });
+        const { data, error } = await withTimeout(supabase.auth.signUp({ email: pseudoEmail, password }));
         if (error) throw error;
         
         if (data.user) {
-          const { error: profileError } = await supabase.from('profiles').insert([{ id: data.user.id, username }]);
+          const { error: profileError } = await withTimeout(supabase.from('profiles').insert([{ id: data.user.id, username }]));
           if (profileError) {
             await supabase.auth.signOut();
             throw new Error('Username might already be taken.');
@@ -97,19 +104,23 @@ export default function Home() {
           }
         }
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({ email: pseudoEmail, password });
+        const { data, error } = await withTimeout(supabase.auth.signInWithPassword({ email: pseudoEmail, password }));
         if (error) throw error;
         if (!data.user) throw new Error("Unexpected error during login.");
         
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+        const { data: profile } = await withTimeout(supabase.from('profiles').select('*').eq('id', data.user.id).single());
         setCurrentUser({ id: data.user.id, email: data.user.email, username: profile?.username || username });
         fetchMyShows(data.user.id);
         setCurrentView('discover');
         loadDefaultTrending();
       }
     } catch (error) {
+      console.error("Auth Error:", error);
+      // If there's a timeout or corruption, forcefully clear local storage to rescue the client
+      if (error.message.includes('timeout')) {
+        await supabase.auth.signOut().catch(() => {});
+      }
       setAuthError(error.message);
-    } finally {
       setIsAuthLoading(false);
     }
   };
