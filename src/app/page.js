@@ -33,87 +33,96 @@ export default function Home() {
   
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [customItem, setCustomItem] = useState({ title: '', type: 'Anime', cover_url: '', description: '' });
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
 
   const watchCategories = [...new Set(myShows.filter(s => s.category && s.category.startsWith('custom_watch:')).map(s => s.category.replace('custom_watch:', '')))];
   const readCategories = [...new Set(myShows.filter(s => s.category && s.category.startsWith('custom_read:')).map(s => s.category.replace('custom_read:', '')))];
 
   useEffect(() => {
-    // Check active session on load
+    // Strict session check on load
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-        if (profile) {
-          setCurrentUser({ id: session.user.id, email: session.user.email, username: profile.username });
-        } else {
-          setCurrentUser({ id: session.user.id, email: session.user.email, username: 'User' });
-        }
-        fetchMyShows(session.user.id);
-        setCurrentView('discover');
-        loadDefaultTrending();
+      try {
+        const fetchSession = async () => {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+            if (profile) {
+              setCurrentUser({ id: session.user.id, email: session.user.email, username: profile.username });
+            } else {
+              setCurrentUser({ id: session.user.id, email: session.user.email, username: 'User' });
+            }
+            fetchMyShows(session.user.id);
+            setCurrentView('discover');
+            loadDefaultTrending();
+          }
+        };
+
+        await Promise.race([
+          fetchSession(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+        ]);
+      } catch (err) {
+        console.error("Session check timed out or failed:", err);
+        await supabase.auth.signOut().catch(() => {});
       }
     };
     checkSession();
-
-    // Listen for auth changes
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-        setCurrentUser({ id: session.user.id, email: session.user.email, username: profile?.username });
-        fetchMyShows(session.user.id);
-        setCurrentView('discover');
-      } else if (event === 'SIGNED_OUT') {
-        setCurrentUser(null);
-        setMyShows([]);
-      }
-    });
-
-    return () => { authListener.subscription.unsubscribe(); };
   }, []);
 
   const handleAuth = async (e) => {
     e.preventDefault();
     setAuthError('');
-    if (!username || !password) {
-      alert('Please fill in all fields.');
-      return setAuthError('Please fill in all fields.');
+    if (!username.trim() || !password) {
+      setAuthError('Please fill in all fields.');
+      return;
     }
 
-    const pseudoEmail = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@rankbox.local`;
+    const pseudoEmail = `${username.trim().toLowerCase().replace(/[^a-z0-9]/g, '')}@rankbox.local`;
+    setIsAuthLoading(true);
 
-    if (authMode === 'register') {
-      const { data, error } = await supabase.auth.signUp({ email: pseudoEmail, password });
-      if (error) {
-        alert(error.message);
-        return setAuthError(error.message);
-      }
-      
-      // Create profile
-      if (data.user) {
-        const { error: profileError } = await supabase.from('profiles').insert([{ id: data.user.id, username }]);
-        if (profileError) {
-          alert('Username might already be taken.');
-          setAuthError('Username might already be taken.');
-          await supabase.auth.signOut();
-        } else {
-          setCurrentUser({ id: data.user.id, email: data.user.email, username });
-          fetchMyShows(data.user.id);
-          setCurrentView('discover');
-          loadDefaultTrending();
+    const withTimeout = (promise, ms = 8000) => {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Network timeout. Please check your connection.')), ms))
+      ]);
+    };
+
+    try {
+      if (authMode === 'register') {
+        const { data, error } = await withTimeout(supabase.auth.signUp({ email: pseudoEmail, password }));
+        if (error) throw error;
+        
+        if (data.user) {
+          const { error: profileError } = await withTimeout(supabase.from('profiles').insert([{ id: data.user.id, username: username.trim() }]));
+          if (profileError) {
+            await supabase.auth.signOut();
+            throw new Error('Username might already be taken.');
+          } else {
+            setCurrentUser({ id: data.user.id, email: data.user.email, username: username.trim() });
+            fetchMyShows(data.user.id);
+            setCurrentView('discover');
+            loadDefaultTrending();
+          }
         }
+      } else {
+        const { data, error } = await withTimeout(supabase.auth.signInWithPassword({ email: pseudoEmail, password }));
+        if (error) throw error;
+        
+        const { data: profile } = await withTimeout(supabase.from('profiles').select('*').eq('id', data?.user?.id).single());
+        setCurrentUser({ id: data.user.id, email: data.user.email, username: profile?.username || username.trim() });
+        fetchMyShows(data.user.id);
+        setCurrentView('discover');
+        loadDefaultTrending();
       }
-    } else {
-      const { data, error } = await supabase.auth.signInWithPassword({ email: pseudoEmail, password });
-      if (error) {
-        alert(error.message);
-        return setAuthError(error.message);
+    } catch (error) {
+      console.error("Auth Error:", error);
+      if (error.message.includes('timeout')) {
+        await supabase.auth.signOut().catch(() => {});
       }
-      
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', data?.user?.id).single();
-      setCurrentUser({ id: data.user.id, email: data.user.email, username: profile?.username || username });
-      fetchMyShows(data.user.id);
-      setCurrentView('discover');
-      loadDefaultTrending();
+      setAuthError(error.message);
+      alert(error.message);
+    } finally {
+      setIsAuthLoading(false);
     }
   };
 
@@ -542,16 +551,20 @@ export default function Home() {
           <h1 className="logo" style={{ textAlign: 'center' }}>Rank<span>Box</span></h1>
           <p style={{ textAlign: 'center', marginBottom: '2rem', color: 'var(--text-muted)' }}>Sign in or create an account</p>
           <form className="auth-form" onSubmit={handleAuth}>
-            <input type="text" placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} />
-            <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} />
+            <input type="text" placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} required />
+            <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required />
             <div className="auth-buttons">
               <button type="button" className={authMode === 'login' ? 'primary' : 'btn-secondary'} onClick={() => setAuthMode('login')}>Login</button>
               <button type="button" className={authMode === 'register' ? 'primary' : 'btn-secondary'} onClick={() => setAuthMode('register')}>Register</button>
             </div>
             {authMode === 'login' ? (
-                <button type="submit" className="primary" style={{ marginTop: '1rem' }}>Sign In</button>
+                <button type="submit" className="primary" style={{ marginTop: '1rem' }} disabled={isAuthLoading}>
+                  {isAuthLoading ? 'Authenticating...' : 'Sign In'}
+                </button>
             ) : (
-                <button type="submit" className="primary" style={{ marginTop: '1rem' }}>Create Account</button>
+                <button type="submit" className="primary" style={{ marginTop: '1rem' }} disabled={isAuthLoading}>
+                  {isAuthLoading ? 'Creating Account...' : 'Create Account'}
+                </button>
             )}
             {authError && <div className="error-msg">{authError}</div>}
           </form>
