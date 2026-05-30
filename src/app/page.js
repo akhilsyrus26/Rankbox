@@ -31,6 +31,9 @@ export default function Home() {
   const [primaryTab, setPrimaryTab] = useState('all');
   const [secondaryTab, setSecondaryTab] = useState('all');
 
+  const watchCategories = [...new Set(myShows.filter(s => s.category && s.category.startsWith('custom_watch:')).map(s => s.category.replace('custom_watch:', '')))];
+  const readCategories = [...new Set(myShows.filter(s => s.category && s.category.startsWith('custom_read:')).map(s => s.category.replace('custom_read:', '')))];
+
   useEffect(() => {
     // Check active session on load
     const checkSession = async () => {
@@ -284,20 +287,7 @@ export default function Home() {
     if (error) alert("Database error setting cover (you may need to run the SQL command first): " + error.message);
   };
 
-  const setCustomCategory = async (id) => {
-    const name = window.prompt("Enter a Custom Category name (e.g., 'Kdrama', 'Light Novels') or leave completely blank to reset it to its default category:");
-    if (name === null) return;
-    
-    let newCategory = name.trim() ? `custom:${name.trim()}` : null;
-    
-    if (!newCategory) {
-        const show = myShows.find(s => s.id === id);
-        if (show.api_id.startsWith('anime_')) newCategory = 'anime';
-        else if (show.api_id.startsWith('tv_')) newCategory = 'tv';
-        else if (show.api_id.startsWith('manga_')) newCategory = 'manga';
-        else newCategory = 'book';
-    }
-
+  const setCustomCategory = async (id, newCategory) => {
     setMyShows(prev => prev.map(s => s.id === id ? { ...s, category: newCategory } : s));
     const { error } = await supabase.from('shows').update({ category: newCategory }).eq('id', id);
     if (error) alert("Error setting category: " + error.message);
@@ -448,7 +438,34 @@ export default function Home() {
                  {activeSettingsMenu === show.id && (
                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg-color)', padding: '10px', borderRadius: '8px', border: '1px solid var(--accent-primary)', marginTop: '5px', zIndex: 100, display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.8)' }}>
                          <button className="btn-small btn-group" style={{ margin: 0 }} onClick={() => { addToCollection(show.id, show.collection_name); setActiveSettingsMenu(null); }}>📁 Add to Collection Folder</button>
-                         <button className="btn-small btn-group" style={{ margin: 0, borderColor: 'var(--accent-secondary)', color: 'var(--accent-secondary)' }} onClick={() => { setCustomCategory(show.id); setActiveSettingsMenu(null); }}>🏷️ Set Custom Category</button>
+                         {(() => {
+                             const isWatch = show.api_id.startsWith('anime_') || show.api_id.startsWith('tv_');
+                             const customList = isWatch ? watchCategories : readCategories;
+                             const prefix = isWatch ? 'custom_watch:' : 'custom_read:';
+                             const defaultCat = show.api_id.startsWith('anime_') ? 'anime' : show.api_id.startsWith('tv_') ? 'tv' : show.api_id.startsWith('manga_') ? 'manga' : 'book';
+                             return (
+                                 <select 
+                                     className="btn-small btn-group" 
+                                     style={{ margin: 0, padding: '0.6rem', borderColor: 'var(--accent-secondary)', color: 'white', background: 'rgba(255,255,255,0.05)', outline: 'none' }}
+                                     value={show.category.startsWith('custom_') ? show.category : "default"}
+                                     onChange={(e) => {
+                                         const val = e.target.value;
+                                         if (val === 'default') setCustomCategory(show.id, defaultCat);
+                                         else if (val === 'new') {
+                                             const name = window.prompt("Enter new category name:");
+                                             if (name && name.trim()) setCustomCategory(show.id, `${prefix}${name.trim()}`);
+                                         } else {
+                                             setCustomCategory(show.id, val);
+                                         }
+                                         setActiveSettingsMenu(null);
+                                     }}
+                                 >
+                                    <option value="default">Default Category</option>
+                                    {customList.map(cat => <option key={cat} value={`${prefix}${cat}`}>Move to {cat}</option>)}
+                                    <option value="new">+ Create New Category</option>
+                                 </select>
+                             );
+                         })()}
                          <button className="btn-small btn-remove" style={{ margin: 0 }} onClick={() => { removeShow(show.id); setActiveSettingsMenu(null); }}>🗑️ Remove from Log</button>
                      </div>
                  )}
@@ -548,21 +565,19 @@ export default function Home() {
 
         {/* LOG VIEW */}
         {currentView === 'log' && (() => {
-          const customCategories = [...new Set(myShows.filter(s => s.category.startsWith('custom:')).map(s => s.category.replace('custom:', '')))];
-          
           const filteredShows = myShows.filter(show => {
               if (primaryTab === 'all') return true;
               if (primaryTab === 'watch') {
-                  if (secondaryTab === 'all') return show.category === 'anime' || show.category === 'tv';
-                  return show.category === secondaryTab;
+                  if (secondaryTab === 'all') return show.category === 'anime' || show.category === 'tv' || show.category.startsWith('custom_watch:');
+                  if (secondaryTab === 'anime') return show.category === 'anime';
+                  if (secondaryTab === 'tv') return show.category === 'tv';
+                  return show.category === `custom_watch:${secondaryTab}`;
               }
               if (primaryTab === 'read') {
-                  if (secondaryTab === 'all') return show.category === 'manga' || show.category === 'book';
-                  return show.category === secondaryTab;
-              }
-              if (primaryTab === 'custom') {
-                  if (secondaryTab === 'all') return show.category.startsWith('custom:');
-                  return show.category === `custom:${secondaryTab}`;
+                  if (secondaryTab === 'all') return show.category === 'manga' || show.category === 'book' || show.category.startsWith('custom_read:');
+                  if (secondaryTab === 'manga') return show.category === 'manga';
+                  if (secondaryTab === 'book') return show.category === 'book';
+                  return show.category === `custom_read:${secondaryTab}`;
               }
               return true;
           });
@@ -576,7 +591,6 @@ export default function Home() {
                   <button className={primaryTab === 'all' ? 'active' : ''} onClick={() => { setPrimaryTab('all'); setSecondaryTab('all'); }}>All</button>
                   <button className={primaryTab === 'watch' ? 'active' : ''} onClick={() => { setPrimaryTab('watch'); setSecondaryTab('all'); }}>Watch (Anime/TV)</button>
                   <button className={primaryTab === 'read' ? 'active' : ''} onClick={() => { setPrimaryTab('read'); setSecondaryTab('all'); }}>Read (Manga/Books)</button>
-                  <button className={primaryTab === 'custom' ? 'active' : ''} onClick={() => { setPrimaryTab('custom'); setSecondaryTab('all'); }}>Custom Categories</button>
               </div>
 
               {primaryTab === 'watch' && (
@@ -584,6 +598,9 @@ export default function Home() {
                       <button className={secondaryTab === 'all' ? 'active' : ''} onClick={() => setSecondaryTab('all')}>All Watch</button>
                       <button className={secondaryTab === 'anime' ? 'active' : ''} onClick={() => setSecondaryTab('anime')}>Anime</button>
                       <button className={secondaryTab === 'tv' ? 'active' : ''} onClick={() => setSecondaryTab('tv')}>TV / Movies</button>
+                      {watchCategories.map(cat => (
+                          <button key={cat} className={secondaryTab === cat ? 'active' : ''} onClick={() => setSecondaryTab(cat)}>{cat}</button>
+                      ))}
                   </div>
               )}
               {primaryTab === 'read' && (
@@ -591,12 +608,7 @@ export default function Home() {
                       <button className={secondaryTab === 'all' ? 'active' : ''} onClick={() => setSecondaryTab('all')}>All Read</button>
                       <button className={secondaryTab === 'manga' ? 'active' : ''} onClick={() => setSecondaryTab('manga')}>Manga</button>
                       <button className={secondaryTab === 'book' ? 'active' : ''} onClick={() => setSecondaryTab('book')}>Books / Novels</button>
-                  </div>
-              )}
-              {primaryTab === 'custom' && (
-                  <div className="sub-tabs">
-                      <button className={secondaryTab === 'all' ? 'active' : ''} onClick={() => setSecondaryTab('all')}>All Custom</button>
-                      {customCategories.map(cat => (
+                      {readCategories.map(cat => (
                           <button key={cat} className={secondaryTab === cat ? 'active' : ''} onClick={() => setSecondaryTab(cat)}>{cat}</button>
                       ))}
                   </div>
