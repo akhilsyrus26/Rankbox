@@ -33,7 +33,6 @@ export default function Home() {
   
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [customItem, setCustomItem] = useState({ title: '', type: 'Anime', cover_url: '', description: '' });
-  const [isAuthLoading, setIsAuthLoading] = useState(false);
 
   const watchCategories = [...new Set(myShows.filter(s => s.category && s.category.startsWith('custom_watch:')).map(s => s.category.replace('custom_watch:', '')))];
   const readCategories = [...new Set(myShows.filter(s => s.category && s.category.startsWith('custom_read:')).map(s => s.category.replace('custom_read:', '')))];
@@ -50,6 +49,7 @@ export default function Home() {
           setCurrentUser({ id: session.user.id, email: session.user.email, username: 'User' });
         }
         fetchMyShows(session.user.id);
+        setCurrentView('discover');
         loadDefaultTrending();
       }
     };
@@ -77,51 +77,22 @@ export default function Home() {
     if (!username || !password) return setAuthError('Please fill in all fields.');
 
     const pseudoEmail = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@rankbox.local`;
-    setIsAuthLoading(true);
 
-    const withTimeout = (promise, ms = 10000) => {
-      return Promise.race([
-        promise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Network timeout. Please check your connection or try again.')), ms))
-      ]);
-    };
-
-    try {
-      if (authMode === 'register') {
-        const { data, error } = await withTimeout(supabase.auth.signUp({ email: pseudoEmail, password }));
-        if (error) throw error;
-        
-        if (data.user) {
-          const { error: profileError } = await withTimeout(supabase.from('profiles').insert([{ id: data.user.id, username }]));
-          if (profileError) {
-            await supabase.auth.signOut();
-            throw new Error('Username might already be taken.');
-          } else {
-              setCurrentUser({ id: data.user.id, email: data.user.email, username });
-              fetchMyShows(data.user.id);
-              setCurrentView('discover');
-              loadDefaultTrending();
-          }
+    if (authMode === 'register') {
+      const { data, error } = await supabase.auth.signUp({ email: pseudoEmail, password });
+      if (error) return setAuthError(error.message);
+      
+      // Create profile
+      if (data.user) {
+        const { error: profileError } = await supabase.from('profiles').insert([{ id: data.user.id, username }]);
+        if (profileError) {
+          setAuthError('Username might already be taken.');
+          await supabase.auth.signOut();
         }
-      } else {
-        const { data, error } = await withTimeout(supabase.auth.signInWithPassword({ email: pseudoEmail, password }));
-        if (error) throw error;
-        if (!data.user) throw new Error("Unexpected error during login.");
-        
-        const { data: profile } = await withTimeout(supabase.from('profiles').select('*').eq('id', data.user.id).single());
-        setCurrentUser({ id: data.user.id, email: data.user.email, username: profile?.username || username });
-        fetchMyShows(data.user.id);
-        setCurrentView('discover');
-        loadDefaultTrending();
       }
-    } catch (error) {
-      console.error("Auth Error:", error);
-      // If there's a timeout or corruption, forcefully clear local storage to rescue the client
-      if (error.message.includes('timeout')) {
-        await supabase.auth.signOut().catch(() => {});
-      }
-      setAuthError(error.message);
-      setIsAuthLoading(false);
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email: pseudoEmail, password });
+      if (error) return setAuthError(error.message);
     }
   };
 
@@ -557,13 +528,9 @@ export default function Home() {
               <button type="button" className={authMode === 'register' ? 'primary' : 'btn-secondary'} onClick={() => setAuthMode('register')}>Register</button>
             </div>
             {authMode === 'login' ? (
-                <button type="submit" className="primary" style={{ marginTop: '1rem' }} disabled={isAuthLoading}>
-                  {isAuthLoading ? 'Authenticating...' : 'Sign In'}
-                </button>
+                <button type="submit" className="primary" style={{ marginTop: '1rem' }}>Sign In</button>
             ) : (
-                <button type="submit" className="primary" style={{ marginTop: '1rem' }} disabled={isAuthLoading}>
-                  {isAuthLoading ? 'Creating Account...' : 'Create Account'}
-                </button>
+                <button type="submit" className="primary" style={{ marginTop: '1rem' }}>Create Account</button>
             )}
             {authError && <div className="error-msg">{authError}</div>}
           </form>
