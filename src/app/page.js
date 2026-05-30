@@ -74,25 +74,46 @@ export default function Home() {
   const handleAuth = async (e) => {
     e.preventDefault();
     setAuthError('');
-    if (!username || !password) return setAuthError('Please fill in all fields.');
+    if (!username || !password) {
+      alert('Please fill in all fields.');
+      return setAuthError('Please fill in all fields.');
+    }
 
     const pseudoEmail = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@rankbox.local`;
 
     if (authMode === 'register') {
       const { data, error } = await supabase.auth.signUp({ email: pseudoEmail, password });
-      if (error) return setAuthError(error.message);
+      if (error) {
+        alert(error.message);
+        return setAuthError(error.message);
+      }
       
       // Create profile
       if (data.user) {
         const { error: profileError } = await supabase.from('profiles').insert([{ id: data.user.id, username }]);
         if (profileError) {
+          alert('Username might already be taken.');
           setAuthError('Username might already be taken.');
           await supabase.auth.signOut();
+        } else {
+          setCurrentUser({ id: data.user.id, email: data.user.email, username });
+          fetchMyShows(data.user.id);
+          setCurrentView('discover');
+          loadDefaultTrending();
         }
       }
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email: pseudoEmail, password });
-      if (error) return setAuthError(error.message);
+      const { data, error } = await supabase.auth.signInWithPassword({ email: pseudoEmail, password });
+      if (error) {
+        alert(error.message);
+        return setAuthError(error.message);
+      }
+      
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', data?.user?.id).single();
+      setCurrentUser({ id: data.user.id, email: data.user.email, username: profile?.username || username });
+      fetchMyShows(data.user.id);
+      setCurrentView('discover');
+      loadDefaultTrending();
     }
   };
 
