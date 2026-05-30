@@ -39,13 +39,14 @@ export default function Home() {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        // Fetch profile
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
         if (profile) {
           setCurrentUser({ id: session.user.id, email: session.user.email, username: profile.username });
-          fetchMyShows(session.user.id);
-          loadDefaultTrending();
+        } else {
+          setCurrentUser({ id: session.user.id, email: session.user.email, username: 'User' });
         }
+        fetchMyShows(session.user.id);
+        loadDefaultTrending();
       }
     };
     checkSession();
@@ -86,12 +87,20 @@ export default function Home() {
           setAuthError('Username might already be taken.');
           await supabase.auth.signOut();
         } else {
+            setCurrentUser({ id: data.user.id, email: data.user.email, username });
+            fetchMyShows(data.user.id);
+            setCurrentView('discover');
             loadDefaultTrending();
         }
       }
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email: pseudoEmail, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email: pseudoEmail, password });
       if (error) return setAuthError(error.message);
+      
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+      setCurrentUser({ id: data.user.id, email: data.user.email, username: profile?.username || username });
+      fetchMyShows(data.user.id);
+      setCurrentView('discover');
       loadDefaultTrending();
     }
   };
