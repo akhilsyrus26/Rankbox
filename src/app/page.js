@@ -46,11 +46,15 @@ export default function Home() {
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
             const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+            let finalUsername = 'User';
             if (profile) {
-              setCurrentUser({ id: session.user.id, email: session.user.email, username: profile.username });
+              finalUsername = profile.username;
             } else {
-              setCurrentUser({ id: session.user.id, email: session.user.email, username: 'User' });
+              // Auto-heal missing profile from bot wipe
+              finalUsername = session.user.email.split('@')[0];
+              await supabase.from('profiles').insert([{ id: session.user.id, username: finalUsername }]);
             }
+            setCurrentUser({ id: session.user.id, email: session.user.email, username: finalUsername });
             fetchMyShows(session.user.id);
             setCurrentView('discover');
             loadDefaultTrending();
@@ -109,7 +113,15 @@ export default function Home() {
         if (error) throw error;
         
         const { data: profile } = await withTimeout(supabase.from('profiles').select('*').eq('id', data?.user?.id).single());
-        setCurrentUser({ id: data.user.id, email: data.user.email, username: profile?.username || username.trim() });
+        let finalUsername = username.trim();
+        if (!profile) {
+          // Auto-heal missing profile from bot wipe
+          await withTimeout(supabase.from('profiles').insert([{ id: data.user.id, username: finalUsername }]));
+        } else {
+          finalUsername = profile.username;
+        }
+        
+        setCurrentUser({ id: data.user.id, email: data.user.email, username: finalUsername });
         fetchMyShows(data.user.id);
         setCurrentView('discover');
         loadDefaultTrending();
