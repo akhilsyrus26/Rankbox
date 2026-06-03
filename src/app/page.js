@@ -366,9 +366,15 @@ export default function Home() {
   };
 
   // --- SOCIAL ACTIONS ---
+  const [socialError, setSocialError] = useState(null);
+
   const handleSocialSearch = async () => {
     if (!socialSearch.trim()) return;
-    const { data } = await supabase.from('profiles').select('*').ilike('username', `%${socialSearch}%`).limit(20);
+    setSocialError(null);
+    const { data, error } = await supabase.from('profiles').select('*').ilike('username', `%${socialSearch.trim()}%`).limit(20);
+    if (error) {
+      setSocialError(error.message);
+    }
     setSocialUsers(data || []);
     setActiveSocialUser(null);
   };
@@ -714,6 +720,7 @@ export default function Home() {
                        onKeyDown={e => e.key === 'Enter' && handleSocialSearch()} />
                 <button className="primary" onClick={handleSocialSearch}>Find</button>
               </div>
+              {socialError && <div className="error-msg">Error: {socialError}</div>}
               <div className="user-list" style={{ maxWidth: '600px' }}>
                 {socialUsers.map(u => (
                     <div key={u.id} className="user-item" onClick={() => viewUserLog(u)}>@{u.username}</div>
