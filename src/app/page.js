@@ -334,10 +334,7 @@ export default function Home() {
     await supabase.from('shows').delete().eq('id', id);
   };
 
-  const addToCollection = async (id, currentName) => {
-    const name = window.prompt("Enter a collection name (e.g., 'Bleach') to group this show, or leave it completely blank to remove it from any collection:", currentName || "");
-    if (name === null) return;
-    
+  const addToCollection = async (id, name) => {
     setMyShows(prev => prev.map(s => s.id === id ? { ...s, collection_name: name } : s));
     const { error } = await supabase.from('shows').update({ collection_name: name }).eq('id', id);
     if (error) alert("Error adding to collection: " + error.message);
@@ -462,6 +459,8 @@ export default function Home() {
   };
 
   const ShowCard = ({ show, isInteractive }) => {
+    const existingFolders = Array.from(new Set(myShows.map(s => s.collection_name).filter(Boolean)));
+
     return (
       <div className="card">
         <img className="card-img" src={show.image || '/placeholder.png'} alt={show.title} onError={(e) => { e.target.onerror = null; e.target.src = '/placeholder.png'; }} />
@@ -515,7 +514,27 @@ export default function Home() {
                  </button>
                  {activeSettingsMenu === show.id && (
                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg-color)', padding: '10px', borderRadius: '8px', border: '1px solid var(--accent-primary)', marginTop: '5px', zIndex: 100, display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.8)' }}>
-                         <button className="btn-small btn-group" style={{ margin: 0 }} onClick={() => { addToCollection(show.id, show.collection_name); setActiveSettingsMenu(null); }}>📁 Add to Collection Folder</button>
+                         <select 
+                             className="btn-small btn-group" 
+                             style={{ margin: 0, padding: '0.6rem', borderColor: 'var(--accent-secondary)', color: 'white', background: 'rgba(255,255,255,0.05)', outline: 'none' }}
+                             value={show.collection_name || "none"}
+                             onChange={(e) => {
+                                 const val = e.target.value;
+                                 if (val === 'none') {
+                                     addToCollection(show.id, ""); 
+                                 } else if (val === 'new') {
+                                     const name = window.prompt("Enter new folder name:");
+                                     if (name && name.trim()) addToCollection(show.id, name.trim());
+                                 } else {
+                                     addToCollection(show.id, val);
+                                 }
+                                 setActiveSettingsMenu(null);
+                             }}
+                         >
+                            <option value="none">No Folder</option>
+                            {existingFolders.map(folder => <option key={folder} value={folder}>📁 {folder}</option>)}
+                            <option value="new">+ Create New Folder</option>
+                         </select>
                          {(() => {
                              const isWatch = show.api_id.startsWith('anime_') || show.api_id.startsWith('tv_');
                              const customList = isWatch ? watchCategories : readCategories;
