@@ -3,6 +3,37 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 
+const CustomDropdown = ({ value, options, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const activeLabel = options.find(o => o.value === value)?.label || "Select...";
+
+  return (
+    <div className="custom-dropdown-container">
+      <button type="button" className="custom-dropdown-button" onClick={() => setIsOpen(!isOpen)}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeLabel}</span>
+        <span style={{ fontSize: '0.7rem', opacity: 0.7, marginLeft: '10px' }}>▼</span>
+      </button>
+      {isOpen && (
+        <>
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }} onClick={() => setIsOpen(false)} />
+          <div className="custom-dropdown-menu">
+            {options.map((opt, idx) => (
+              <button 
+                key={idx}
+                type="button" 
+                className={`custom-dropdown-item ${opt.isAction ? 'action-item' : ''}`}
+                onClick={() => { onChange(opt.value); setIsOpen(false); }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 export default function Home() {
   const [currentUser, setCurrentUser] = useState(null);
   const [currentView, setCurrentView] = useState('discover'); // 'discover', 'log', 'social'
@@ -514,12 +545,14 @@ export default function Home() {
                  </button>
                  {activeSettingsMenu === show.id && (
                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg-color)', padding: '10px', borderRadius: '8px', border: '1px solid var(--accent-primary)', marginTop: '5px', zIndex: 100, display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.8)' }}>
-                         <select 
-                             className="btn-small btn-group" 
-                             style={{ margin: 0, padding: '0.6rem', borderColor: 'var(--accent-secondary)', color: 'white', background: 'rgba(255,255,255,0.05)', outline: 'none' }}
+                         <CustomDropdown 
                              value={show.collection_name || "none"}
-                             onChange={(e) => {
-                                 const val = e.target.value;
+                             options={[
+                                { value: 'none', label: 'No Folder' },
+                                ...existingFolders.map(folder => ({ value: folder, label: `📁 ${folder}` })),
+                                { value: 'new', label: '+ Create New Folder', isAction: true }
+                             ]}
+                             onChange={(val) => {
                                  if (val === 'none') {
                                      addToCollection(show.id, ""); 
                                  } else if (val === 'new') {
@@ -530,23 +563,21 @@ export default function Home() {
                                  }
                                  setActiveSettingsMenu(null);
                              }}
-                         >
-                            <option value="none">No Folder</option>
-                            {existingFolders.map(folder => <option key={folder} value={folder}>📁 {folder}</option>)}
-                            <option value="new">+ Create New Folder</option>
-                         </select>
+                         />
                          {(() => {
                              const isWatch = show.api_id.startsWith('anime_') || show.api_id.startsWith('tv_');
                              const customList = isWatch ? watchCategories : readCategories;
                              const prefix = isWatch ? 'custom_watch:' : 'custom_read:';
                              const defaultCat = show.api_id.startsWith('anime_') ? 'anime' : show.api_id.startsWith('tv_') ? 'tv' : show.api_id.startsWith('manga_') ? 'manga' : 'book';
                              return (
-                                 <select 
-                                     className="btn-small btn-group" 
-                                     style={{ margin: 0, padding: '0.6rem', borderColor: 'var(--accent-secondary)', color: 'white', background: 'rgba(255,255,255,0.05)', outline: 'none' }}
+                                 <CustomDropdown 
                                      value={show.category.startsWith('custom_') ? show.category : "default"}
-                                     onChange={(e) => {
-                                         const val = e.target.value;
+                                     options={[
+                                        { value: 'default', label: 'Default Category' },
+                                        ...customList.map(cat => ({ value: `${prefix}${cat}`, label: `Move to ${cat}` })),
+                                        { value: 'new', label: '+ Create New Category', isAction: true }
+                                     ]}
+                                     onChange={(val) => {
                                          if (val === 'default') setCustomCategory(show.id, defaultCat);
                                          else if (val === 'new') {
                                              const name = window.prompt("Enter new category name:");
@@ -556,11 +587,7 @@ export default function Home() {
                                          }
                                          setActiveSettingsMenu(null);
                                      }}
-                                 >
-                                    <option value="default">Default Category</option>
-                                    {customList.map(cat => <option key={cat} value={`${prefix}${cat}`}>Move to {cat}</option>)}
-                                    <option value="new">+ Create New Category</option>
-                                 </select>
+                                 />
                              );
                          })()}
                          <button className="btn-small btn-remove" style={{ margin: 0 }} onClick={() => { removeShow(show.id); setActiveSettingsMenu(null); }}>🗑️ Remove from Log</button>
