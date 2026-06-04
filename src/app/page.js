@@ -544,26 +544,40 @@ export default function Home() {
                     ⚙️ Settings
                  </button>
                  {activeSettingsMenu === show.id && (
-                     <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg-color)', padding: '10px', borderRadius: '8px', border: '1px solid var(--accent-primary)', marginTop: '5px', zIndex: 100, display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.8)' }}>
-                         <CustomDropdown 
-                             value={show.collection_name || "none"}
-                             options={[
-                                { value: 'none', label: 'No Folder' },
-                                ...existingFolders.map(folder => ({ value: folder, label: `📁 ${folder}` })),
-                                { value: 'new', label: '+ Create New Folder', isAction: true }
-                             ]}
-                             onChange={(val) => {
-                                 if (val === 'none') {
-                                     addToCollection(show.id, ""); 
-                                 } else if (val === 'new') {
-                                     const name = window.prompt("Enter new folder name:");
-                                     if (name && name.trim()) addToCollection(show.id, name.trim());
-                                 } else {
-                                     addToCollection(show.id, val);
-                                 }
-                                 setActiveSettingsMenu(null);
-                             }}
-                         />
+                     <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg-color)', padding: '12px', borderRadius: '8px', border: '1px solid var(--accent-primary)', marginTop: '5px', zIndex: 100, display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: '0 4px 20px rgba(0,0,0,0.9)' }}>
+                         
+                         {/* FOLDER SECTION */}
+                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '1px' }}>Folder Options</div>
+                         
+                         <button className="btn-small btn-group" style={{ margin: 0, borderColor: '#10b981', color: '#10b981' }} onClick={() => { 
+                             const name = window.prompt("Enter new folder name:");
+                             if (name && name.trim()) addToCollection(show.id, name.trim());
+                             setActiveSettingsMenu(null);
+                         }}>+ Make a Folder</button>
+                         
+                         {existingFolders.length > 0 && (
+                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                 {existingFolders.map(folder => (
+                                     <button key={folder} className="btn-small" style={{ margin: 0, background: show.collection_name === folder ? 'var(--accent-primary)' : 'rgba(255,255,255,0.05)', color: 'white', borderColor: show.collection_name === folder ? 'var(--accent-primary)' : 'var(--glass-border)', textAlign: 'left', padding: '0.5rem 0.8rem' }} onClick={() => { 
+                                         addToCollection(show.id, folder); 
+                                         setActiveSettingsMenu(null);
+                                     }}>📁 {folder}</button>
+                                 ))}
+                             </div>
+                         )}
+
+                         {show.collection_name && (
+                             <button className="btn-small btn-group" style={{ margin: 0, color: 'var(--text-muted)', borderColor: 'var(--glass-border)' }} onClick={() => { 
+                                 addToCollection(show.id, ""); 
+                                 setActiveSettingsMenu(null); 
+                             }}>❌ Remove from Folder</button>
+                         )}
+
+                         <div style={{ borderTop: '1px solid var(--glass-border)', margin: '4px 0' }}></div>
+
+                         {/* CATEGORY SECTION */}
+                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '1px' }}>Category Status</div>
+                         
                          {(() => {
                              const isWatch = show.api_id.startsWith('anime_') || show.api_id.startsWith('tv_');
                              const customList = isWatch ? watchCategories : readCategories;
@@ -590,6 +604,8 @@ export default function Home() {
                                  />
                              );
                          })()}
+                         
+                         <div style={{ borderTop: '1px solid var(--glass-border)', margin: '4px 0' }}></div>
                          <button className="btn-small btn-remove" style={{ margin: 0 }} onClick={() => { removeShow(show.id); setActiveSettingsMenu(null); }}>🗑️ Remove from Log</button>
                      </div>
                  )}

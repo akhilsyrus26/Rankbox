@@ -4,8 +4,8 @@
     --glass-bg: rgba(255, 255, 255, 0.03); --glass-border: rgba(255, 255, 255, 0.08);
 }
 * { box-sizing: border-box; padding: 0; margin: 0; font-family: 'Outfit', sans-serif; }
-html, body { overflow-x: hidden; width: 100%; }
-body { background-color: var(--bg-color); color: var(--text-main); min-height: 100vh; position: relative; }
+html { overflow-x: hidden; }
+body { background-color: var(--bg-color); color: var(--text-main); min-height: 100vh; position: relative; overflow-x: hidden; }
 
 .background-blob { position: absolute; border-radius: 50%; filter: blur(100px); z-index: -1; opacity: 0.5; animation: float 10s infinite ease-in-out alternate; }
 .blob-1 { width: 400px; height: 400px; background: var(--accent-primary); top: -100px; left: -100px; }
